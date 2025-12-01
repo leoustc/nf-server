@@ -1,0 +1,58 @@
+---
+- name: Upload and start bootstrap service
+  hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: Wait for SSH initially
+      wait_for_connection:
+        timeout: 600
+        sleep: 10
+
+    - name: Ensure python3-pip is installed
+      become: yes
+      apt:
+        name: python3-pip
+        state: present
+        update_cache: yes
+
+    - name: Ensure awscli is installed via pip3
+      become: yes
+      pip:
+        name: awscli
+        executable: pip3
+
+    - name: Upload cmd_script.sh
+      copy:
+        src: cmd_script.sh
+        dest: /tmp/cmd_script.sh
+        mode: '0755'
+
+    - name: Install nf-bootstrap systemd service
+      become: yes
+      copy:
+        dest: /etc/systemd/system/nf-bootstrap.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=NF Bootstrap Job
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/bin/bash /tmp/cmd_script.sh
+          Restart=no
+          StandardOutput=append:/var/log/bootstrap.log
+          StandardError=append:/var/log/bootstrap.log
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd daemon
+      become: yes
+      command: systemctl daemon-reload
+
+    - name: Start nf-bootstrap service
+      become: yes
+      command: systemctl start nf-bootstrap.service

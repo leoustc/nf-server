@@ -1,0 +1,167 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nf-server
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nf-server-env
+  namespace: nf-server
+data:
+  UVICORN_WORKERS: "${UVICORN_WORKERS}"
+  EXECUTOR_WORKERS: "${EXECUTOR_WORKERS}"
+  DB_INIT_RETRIES: "${DB_INIT_RETRIES}"
+  DB_INIT_DELAY: "${DB_INIT_DELAY}"
+  DB_HOST: "${DB_HOST}"
+  DB_PORT: "${DB_PORT}"
+  DB_USER: "${DB_USER}"
+  DB_PASSWORD: "${DB_PASSWORD}"
+  DB_NAME: "${DB_NAME}"
+  API_KEYS: "${API_KEYS}"
+  RUN_LOCAL: "${RUN_LOCAL}"
+  COMPARTMENT_ID: "${COMPARTMENT_ID}"
+  SUBNET_ID: "${SUBNET_ID}"
+  BASTION_IP: "${BASTION_IP}"
+  BASTION_USER: "${BASTION_USER}"
+  BASTION_SSH_KEY: "${BASTION_SSH_KEY}"
+  DEFAULT_SHAPE: "${DEFAULT_SHAPE}"
+  DEFAULT_OCPU: "${DEFAULT_OCPU}"
+  DEFAULT_MEMORY_IN_GB: "${DEFAULT_MEMORY_IN_GB}"
+  DEFAULT_BOOTDISK_IN_GB: "${DEFAULT_BOOTDISK_IN_GB}"
+  HEARTBEAT_SECONDS: "${HEARTBEAT_SECONDS}"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nf-server-secret
+  namespace: nf-server
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+  MYSQL_DATABASE: "${MYSQL_DATABASE}"
+  MYSQL_USER: "${MYSQL_USER}"
+  MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+---
+# Optional secret for OCI keys; create separately or let this reference be optional.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nf-server-oci
+  namespace: nf-server
+type: Opaque
+data: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: nf-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nf-server-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: nf-server-secret
+                  key: MYSQL_DATABASE
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: nf-server-secret
+                  key: MYSQL_USER
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nf-server-secret
+                  key: MYSQL_PASSWORD
+          ports:
+            - containerPort: 3306
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: mysql-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: nf-server
+spec:
+  selector:
+    app: mysql
+  ports:
+    - port: 3306
+      targetPort: 3306
+      name: mysql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nf-gateway
+  namespace: nf-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nf-gateway
+  template:
+    metadata:
+      labels:
+        app: nf-gateway
+    spec:
+      containers:
+        - name: gateway
+          image: leoustc/nf-server:gateway.v2
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: nf-server-env
+            - secretRef:
+                name: nf-server-secret
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: oci-keys
+              mountPath: /root/.oci
+              readOnly: true
+      volumes:
+        - name: oci-keys
+          secret:
+            secretName: nf-server-oci
+            optional: true
+            defaultMode: 0600
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nf-gateway
+  namespace: nf-server
+spec:
+  type: NodePort
+  selector:
+    app: nf-gateway
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      nodePort: 30711

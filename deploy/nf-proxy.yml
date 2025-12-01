@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nf-proxy-shared-bot
+  namespace: nf-server
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  # Set your RWX-capable storage class if needed, e.g. "efs-sc" or "nfs-sc".
+  # storageClassName: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nf-proxy
+  namespace: nf-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nf-proxy
+  template:
+    metadata:
+      labels:
+        app: nf-proxy
+    spec:
+      containers:
+        - name: proxy
+          image: leoustc/nf-server:proxy.v2
+          imagePullPolicy: Always
+          envFrom:
+            - configMapRef:
+                name: nf-server-env
+            - secretRef:
+                name: nf-server-secret
+          volumeMounts:
+            - name: oci-keys
+              mountPath: /root/.oci
+              readOnly: true
+            - name: bot-shared
+              mountPath: /opt/bot
+      volumes:
+        - name: oci-keys
+          secret:
+            secretName: nf-server-oci
+            optional: true
+            defaultMode: 0600
+        - name: bot-shared
+          persistentVolumeClaim:
+            claimName: nf-proxy-shared-bot
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nf-proxy
+  namespace: nf-server
+spec:
+  type: ClusterIP
+  selector:
+    app: nf-proxy
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

@@ -1,0 +1,16 @@
+# Changelog
+
+## [0.9.0] - 2024-12-01
+### Added
+- Stage S3 input files as part of the flow to ensure remote workers have data locally.
+- Accelerator-aware scheduling support.
+- Job lock to prevent concurrent races on the same job.
+- Multi-node scaling (preview) for larger workloads.
+- Prebuilt container image deploy flow for Kubernetes targets.
+- Support running across multiple compartments/subnets for better scalability.
+- Helper tools moved under `tools/` in this module for OCI and workflow debugging.
+
+### Changed
+- Split job submission, monitoring, and result handling into clearer phases.
+- Improved stability under load and more robust kill handling.
+- Clean up failure workspaces to reduce residue between runs.

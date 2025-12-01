@@ -1,0 +1,103 @@
+services:
+  gateway:
+    image: rest-gateway:latest  # local tag built via Makefile
+    build:
+      context: src/gateway
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "7011:8080"
+    restart: unless-stopped
+    environment:
+      - UVICORN_WORKERS=${UVICORN_WORKERS}
+      - DB_INIT_RETRIES=${DB_INIT_RETRIES}
+      - DB_INIT_DELAY=${DB_INIT_DELAY}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - API_KEYS=${API_KEYS}
+      - HEARTBEAT_SECONDS=${HEARTBEAT_SECONDS}
+
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    volumes:
+      - /tmp/mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  proxy-0:
+    image: rest-proxy:latest  # local tag built via Makefile
+    build:
+      context: src/proxy
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./.oci:/root/.oci:ro
+      - /tmp/bottmp:/opt/bot # for debug only, you can remove this if you do not want to check the status
+    environment:
+      - EXECUTOR_WORKERS=${EXECUTOR_WORKERS}
+      - DB_INIT_RETRIES=${DB_INIT_RETRIES}
+      - DB_INIT_DELAY=${DB_INIT_DELAY}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - RUN_LOCAL=${RUN_LOCAL}
+      - COMPARTMENT_ID=${COMPARTMENT_ID}
+      - SUBNET_ID=${SUBNET_ID}
+      # Bastion connection details
+      - BASTION_IP=${BASTION_IP}
+      - BASTION_USER=${BASTION_USER}
+      - BASTION_SSH_KEY=${BASTION_SSH_KEY}
+      - DEFAULT_SHAPE=${DEFAULT_SHAPE}
+      - DEFAULT_OCPU=${DEFAULT_OCPU}
+      - DEFAULT_MEMORY_IN_GB=${DEFAULT_MEMORY_IN_GB}
+      - DEFAULT_BOOTDISK_IN_GB=${DEFAULT_BOOTDISK_IN_GB}
+
+  proxy-1:
+    image: rest-proxy:latest  # local tag built via Makefile
+    build:
+      context: src/proxy
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./.oci:/root/.oci:ro
+      - /tmp/bottmp:/opt/bot # for debug only, you can remove this if you do not want to check the status
+    environment:
+      - EXECUTOR_WORKERS=${EXECUTOR_WORKERS}
+      - DB_INIT_RETRIES=${DB_INIT_RETRIES}
+      - DB_INIT_DELAY=${DB_INIT_DELAY}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - RUN_LOCAL=${RUN_LOCAL}
+      - COMPARTMENT_ID=${COMPARTMENT_ID}
+      - SUBNET_ID=${SUBNET_ID}
+      # Bastion connection details
+      - BASTION_IP=${BASTION_IP}
+      - BASTION_USER=${BASTION_USER}
+      - BASTION_SSH_KEY=${BASTION_SSH_KEY}
+      - DEFAULT_SHAPE=${DEFAULT_SHAPE}
+      - DEFAULT_OCPU=${DEFAULT_OCPU}
+      - DEFAULT_MEMORY_IN_GB=${DEFAULT_MEMORY_IN_GB}
+      - DEFAULT_BOOTDISK_IN_GB=${DEFAULT_BOOTDISK_IN_GB}

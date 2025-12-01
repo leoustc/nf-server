@@ -1,0 +1,28 @@
+---
+- name: Wait for nf-bootstrap systemd service
+  hosts: all
+  gather_facts: no
+
+  vars:
+    service_name: nf-bootstrap.service
+
+  tasks:
+    - name: Wait for SSH (retry if dropped)
+      wait_for_connection:
+        timeout: 600
+        sleep: 10
+
+    - name: Check nf-bootstrap service status once
+      shell: "systemctl is-active {{ service_name }} || true"
+      register: svc_status
+      changed_when: false
+      failed_when: false
+
+    - name: Report nf-bootstrap service status
+      debug:
+        msg: "nf-bootstrap status: {{ svc_status.stdout | default('unknown') }}"
+
+    - name: Fail when nf-bootstrap is not done yet
+      fail:
+        msg: "nf-bootstrap still running (status={{ svc_status.stdout | default('unknown') }})"
+      when: svc_status.stdout not in ['inactive', 'failed']
