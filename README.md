@@ -2,6 +2,17 @@
 
 Deploy the Nextflow REST executor with Docker Compose, using OCI credentials and optional bastion access for private subnets. Supports S3 input staging, accelerator-aware scheduling, job locking, and prebuilt image deployment to Kubernetes.
 
+<p align="center">
+  <img src="nf-rest.jpg" alt="nf-rest architecture" width="200" height="200" />
+</p>
+
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=yhLFBJLs_zc" target="_blank">
+    <img src="https://img.youtube.com/vi/yhLFBJLs_zc/0.jpg" alt="nf-rest video overview" width="600" />
+  </a>
+</p>
+
+
 ## Architecture
 Gateway fronts the API/queue; proxies are worker agents that provision, monitor, and health-check jobs. Proxies can run in different compartments/subnets; if you run multiple proxies, they must share the same `/opt/bot` working directory (e.g., shared volume) to keep staging/state consistent.
 
