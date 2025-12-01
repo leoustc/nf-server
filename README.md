@@ -69,29 +69,6 @@ The REST executor listens on port `7011` (mapped to container `8080`).
 ## Local run test
 Use `LOCAL_RUN` to bypass Terraform when validating workflows locally. When `LOCAL_RUN=0` (default), the gateway skips launching Terraform and instead runs the workflow with a local bash invocation.
 
-## Architecture
-Gateway fronts the API/queue; proxies are worker agents that provision, monitor, and health-check jobs. Proxies can run in different compartments/subnets; if you run multiple proxies, they must share the same `/opt/bot` working directory (e.g., shared volume) to keep staging/state consistent.
-
-```
-        +------------+        enqueue jobs        +-----------+
-        |  Nextflow  | --------------------------> | Gateway   |
-        |  REST exec |                             | (API/DB)  |
-        +------------+                             +-----------+
-                                                    |   |   |
-                                     dispatch jobs   |   |   |
-                                                    v   v   v
-                                           +--------------------+
-                                           |  Proxy (worker)    |
-                                           |  /opt/bot shared   |
-                                           +--------------------+
-                                                    | provision/monitor
-                                                    v
-                                            +-----------------+
-                                            | Kubernetes/OCI  |
-                                            | VM (runner)     |
-                                            +-----------------+
-```
-
 ## Kubernetes (prebuilt image)
 - Build or pull the prebuilt image and point your Kubernetes manifests to it.
 - Mount OCI and S3 credentials as secrets or volumes; ensure the same env vars used in `.env` are set on the Deployment.
