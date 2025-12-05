@@ -37,3 +37,5 @@ status:
 
 logs:
 	kubectl -n nf-server logs -l app=nf-gateway --tail=100 -f
+logs-proxy:
+	kubectl -n nf-server logs -l app=nf-proxy --tail=100 -f

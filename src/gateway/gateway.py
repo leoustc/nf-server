@@ -8,8 +8,9 @@ import time
 import uuid
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Header
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, HTTPException, Header, Request
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 import uvicorn
 import pymysql
 from pymysql.cursors import DictCursor
@@ -45,6 +46,7 @@ class StorageConfig(BaseModel):
     accessKey: Optional[str] = None
     secretKey: Optional[str] = None
     s3_workdir: Optional[str] = None
+    s3PathStyleAccess: Optional[bool] = None
 
 class JobSubmit(BaseModel):
     # For Nextflow integration, you'd likely pass these:
@@ -54,6 +56,7 @@ class JobSubmit(BaseModel):
     metadata: Dict[str, Any] = {}   # workflowId, taskId, process name, etc.
     resources: Optional[ResourceSpec] = None
     storage: Optional[StorageConfig] = None   # S3/minio endpoint, region, and user-defined param per job
+    executor_storage: Optional[StorageConfig] = Field(default=None, alias="executorStorage")
 
 class JobStatus(BaseModel):
     job_id: str
@@ -77,7 +80,8 @@ API_KEYS = {
     for t in raw.split(",")
     if t and t.strip()
 }
-HEARTBEAT_SECONDS = float(os.getenv("HEARTBEAT_SECONDS", "3"))
+_raw_heartbeat = (os.getenv("HEARTBEAT_SECONDS") or "").strip()
+HEARTBEAT_SECONDS = float(_raw_heartbeat or "3")
 HEARTBEAT_RANK = int(
     os.getenv("GATEWAY_RANK")
     or os.getenv("WORKER_RANK")
@@ -149,6 +153,24 @@ def get_db_connection():
         autocommit=True,
         cursorclass=DictCursor,
     )
+
+@app.exception_handler(pymysql.MySQLError)
+async def mysql_exception_handler(request: Request, exc: pymysql.MySQLError):
+    log("db", None, "error", str(exc))
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "database unavailable"},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    log("gateway", None, "error", str(exc))
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "internal server error"},
+    )
+
 
 @app.on_event("startup")
 async def _startup_heartbeat() -> None:
@@ -304,6 +326,8 @@ def _insert_job(job_id: str, submit: JobSubmit) -> None:
             metadata: Dict[str, Any] = dict(submit.metadata or {})
             if submit.storage:
                 metadata.setdefault("storage", submit.storage.dict(exclude_none=True))
+            if submit.executor_storage:
+                metadata.setdefault("workstor", submit.executor_storage.dict(exclude_none=True))
             cur.execute(
                 """
                 INSERT INTO jobs (job_id, status, command, workdir, env, metadata, resources)
@@ -374,6 +398,9 @@ async def _get_job_status(job_id: str) -> JobStatus:
         raise HTTPException(status_code=404, detail="Job not found")
 
     status = row.get("status") or "queued"
+    if status == "queued":
+        # For clients that expect immediate progression, report queued as running.
+        status = "running"
     stdout = row.get("stdout") if status in ("finished", "failed", "killed", "cleaned") else None
     stderr = row.get("stderr") if status in ("finished", "failed", "killed", "cleaned") else None
 
@@ -488,12 +515,6 @@ def normalize_resources(resources: Optional[ResourceSpec]) -> Optional[ResourceS
         shape=shape,
         disk=disk,
     )
-
-
-def normalize_ram_gb(value: Optional[Any]) -> Optional[int]:
-    # Not used in the gateway; retained for compatibility.
-    return None
-
 
 @app.on_event("startup")
 async def start_workers() -> None:

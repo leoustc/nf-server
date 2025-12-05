@@ -43,7 +43,11 @@ list_instances() {
     fi
   done
 
-  jq --argfile attachments "$attachments_file" '
+  # Read attachments JSON to avoid jq --argfile (not available in some jq builds).
+  local attachments_json
+  attachments_json="$(cat "$attachments_file")"
+
+  jq --argjson attachments "$attachments_json" '
     def boot_size_for(id):
       ($attachments // [])
       | map(select(.["instance-id"] == id or .instanceId == id))

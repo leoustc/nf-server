@@ -343,6 +343,7 @@ def build_tfvars(worker_id: int, job_id: str, row: Dict[str, Any], name: str) ->
         metadata = {}
 
     storage: Dict[str, Any] = metadata.get("storage") or {}
+    executor_storage: Dict[str, Any] = metadata.get("workstor") or {}
     
     params_input = metadata.get("paramsInput") or []
     if isinstance(params_input, str):
@@ -408,6 +409,10 @@ def build_tfvars(worker_id: int, job_id: str, row: Dict[str, Any], name: str) ->
 
     log(worker_id, job_id, "resources", f"accelerator={accelerator} shape={shape} cpu={cpu} ram={ram} boot={boot}")
     log(worker_id, job_id, "storage", f"endpoint={s3_endpoint} region={s3_region} bucket={s3_bucket} s3_workdir={s3_workdir}")
+    if executor_storage:
+        exec_endpoint = str(executor_storage.get("endpoint") or "")
+        exec_bucket = str(executor_storage.get("bucket") or executor_storage.get("user_param") or "")
+        log(worker_id, job_id, "workstor", f"endpoint={exec_endpoint} bucket={exec_bucket}")
 
     env_vars = "\n".join(
         [

@@ -9,7 +9,8 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn[standard] pymysql pydantic==1.10.13
+# pymysql needs cryptography when MySQL is configured with sha256/caching_sha2 auth
+RUN pip install --no-cache-dir fastapi uvicorn[standard] pymysql cryptography pydantic==1.10.13
 
 COPY . .
 
